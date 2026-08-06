@@ -1,6 +1,15 @@
+"""
+slurm.py: HPC integration and Slurm workload manager orchestration.
+
+Provides utilities to synchronize project job manifests and generate Slurm 
+array scripts. The generated scripts are designed to execute calculations 
+within the toolkit's 'Uniform Depth' directory architecture.
+"""
+from datetime import datetime
 from pathlib import Path
 
 from .job_manifest import update_job_statuses, write_job_manifest
+
 
 DEFAULT_MODULES = ["intel/23.1", "impi/21.9"]
 
@@ -20,11 +29,12 @@ module --force purge
 {module_loads}
 
 ROOT="${{SLURM_SUBMIT_DIR}}/{project_dir}"
+JOBLIST="$ROOT/{joblist_filename}"
 
-WORKDIR=$(sed -n "$((SLURM_ARRAY_TASK_ID+1))p" "$ROOT/joblist.txt")
+WORKDIR=$(sed -n "$((SLURM_ARRAY_TASK_ID+1))p" "$JOBLIST")
 
 if [[ -z "$WORKDIR" ]]; then
-    echo "No entry for array index $SLURM_ARRAY_TASK_ID" >&2
+    echo "No entry for array index $SLURM_ARRAY_TASK_ID in $JOBLIST" >&2
     exit 1
 fi
 
@@ -46,62 +56,91 @@ def generate_slurm_array(
     job_name: str = "epi",
     modules: list[str] | None = None,
     max_concurrent: int | None = None,
+    max_submit: int | None = None,
     output_filename: str = "runjob_array.slurm",
 ) -> Path:
-    """Generate a Slurm array script for unfinished calculations in a project."""
+    """Generate a bounded Slurm array for unfinished calculations."""
     if scheduler != "slurm":
         raise NotImplementedError(
-            f"scheduler={scheduler!r} not supported yet -- only 'slurm' is implemented"
+            f"scheduler={scheduler!r} is unsupported; only 'slurm' is implemented."
         )
 
-    project_dir = Path(project_dir)
-    if project_dir.is_absolute():
+    if max_concurrent is not None and max_concurrent < 1:
+        raise ValueError("max_concurrent must be at least 1.")
+
+    if max_submit is not None and max_submit < 1:
+        raise ValueError("max_submit must be at least 1.")
+
+    project_path = Path(project_dir)
+    if project_path.is_absolute():
         raise ValueError(
-            "project_dir must be relative to the directory where the Slurm script "
-            "will be submitted."
+            "project_dir must be relative to the directory where sbatch is run."
         )
 
-    project_dir_text = project_dir.as_posix().rstrip("/")
-    (project_dir / "logs").mkdir(parents=True, exist_ok=True)
+    project_dir_text = project_path.as_posix().rstrip("/")
+    (project_path / "logs").mkdir(parents=True, exist_ok=True)
 
-    update_job_statuses(project_dir)
-    joblist_path = write_job_manifest(project_dir)
-    n_jobs = sum(1 for _ in joblist_path.open())
+    update_job_statuses(project_path)
+
+    batch_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    joblist_filename = f"joblist_{batch_id}.txt"
+    joblist_path = write_job_manifest(
+        project_path,
+        filename=joblist_filename,
+        max_jobs=max_submit,
+    )
+
+    n_jobs = sum(1 for _ in joblist_path.open(encoding="utf-8"))
     if n_jobs == 0:
-        raise ValueError("Nothing left to submit -- every strain is already converged.")
+        joblist_path.unlink(missing_ok=True)
+        raise ValueError(
+            "Nothing left to submit; every calculation is already converged."
+        )
 
     placeholders = []
-    if partition == "<PARTITION>":
+    if partition in (None, "<PARTITION>"):
         placeholders.append("<PARTITION>")
-    if account == "<ACCOUNT>":
+    if account in (None, "<ACCOUNT>"):
         placeholders.append("<ACCOUNT>")
 
     if placeholders:
         print(
             "WARNING: The generated Slurm script contains placeholder value(s): "
-            f"{', '.join(placeholders)}.\n"
-            "Replace them in the generated script before submitting with `sbatch`, "
-            "or regenerate the script with, for example:\n\n"
-            f"    estk slurm {project_dir} --partition normal --account TG-XXXXXXX\n"
+            f"{', '.join(placeholders)}. Configure them before submission."
         )
+
+    effective_concurrent = max_concurrent
+    if effective_concurrent is not None:
+        effective_concurrent = min(effective_concurrent, n_jobs)
 
     script = TEMPLATE.format(
         project_dir=project_dir_text,
+        joblist_filename=joblist_filename,
         job_name=job_name,
-        partition=partition,
+        partition=partition or "<PARTITION>",
         nodes=nodes,
         ntasks=ntasks,
-        account=account,
+        account=account or "<ACCOUNT>",
         walltime=walltime,
         max_index=n_jobs - 1,
-        throttle=f"%{max_concurrent}" if max_concurrent else "",
+        throttle=(
+            f"%{effective_concurrent}"
+            if effective_concurrent is not None
+            else ""
+        ),
         module_loads="\n".join(
-            f"module load {module}" for module in (modules or DEFAULT_MODULES)
+            f"module load {module}"
+            for module in (modules or DEFAULT_MODULES)
         ),
         executable=executable,
     )
+
     output_path = Path(output_filename)
-    output_path.write_text(script)
+    output_path.write_text(script, encoding="utf-8")
     output_path.chmod(0o755)
-    print(f"Wrote {output_path} (array 0-{n_jobs - 1}, {n_jobs} job(s))")
+
+    print(
+        f"Wrote {output_path} using {joblist_path} "
+        f"(array 0-{n_jobs - 1}, {n_jobs} job(s))"
+    )
     return output_path
