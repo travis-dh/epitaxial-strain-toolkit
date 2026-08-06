@@ -1,0 +1,66 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python environments
+.venv/
+venv/
+env/
+ENV/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Type checking / linting
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# ESTK generated files
+oriented_structures/
+*.manifest.json
+
+# VASP calculation output
+OUTCAR
+OSZICAR
+vasprun.xml
+vasprun.xml.gz
+XDATCAR
+WAVECAR
+CHGCAR
+CHG
+LOCPOT
+PROCAR
+EIGENVAL
+DOSCAR
+IBZKPT
+
+# Slurm output
+slurm-*.out
+slurm-*.err
+
+# Temporary files
+*.tmp
+*.swp
+*~

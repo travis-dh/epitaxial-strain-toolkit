@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "epitaxial-strain-toolkit"
+version = "0.1.0"
+description = "Symmetry-aware VASP pre-processing for epitaxial strain calculations"
+readme = "README.md"
+license = { file = "LICENSE" }
+
+requires-python = ">=3.11"
+
+authors = [
+    { name = "Travis Howard", email = "htravis@wustl.edu" }
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
+
+dependencies = [
+    "pymatgen>=2024.0.0",
+    "numpy",
+    "tomli-w",
+]
+
+
+[project.scripts]
+estk = "estk.cli:main"
+
+
+[tool.setuptools]
+license-files = ["LICENSE"]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
