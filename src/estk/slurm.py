@@ -57,6 +57,7 @@ def generate_slurm_array(
     modules: list[str] | None = None,
     max_concurrent: int | None = None,
     max_submit: int | None = None,
+    orientation_labels: list[str] | None = None,
     output_filename: str = "runjob_array.slurm",
 ) -> Path:
     """Generate a bounded Slurm array for unfinished calculations."""
@@ -88,13 +89,20 @@ def generate_slurm_array(
         project_path,
         filename=joblist_filename,
         max_jobs=max_submit,
+        orientation_labels=orientation_labels,
     )
 
     n_jobs = sum(1 for _ in joblist_path.open(encoding="utf-8"))
     if n_jobs == 0:
         joblist_path.unlink(missing_ok=True)
+        orientation_text = (
+            f" for orientation(s) {', '.join(orientation_labels)}"
+            if orientation_labels
+            else ""
+        )
         raise ValueError(
-            "Nothing left to submit; every calculation is already converged."
+            f"Nothing left to submit{orientation_text}; "
+            "all selected calculations are converged."
         )
 
     placeholders = []
@@ -139,8 +147,13 @@ def generate_slurm_array(
     output_path.write_text(script, encoding="utf-8")
     output_path.chmod(0o755)
 
+    orientation_text = (
+        f", orientations {', '.join(orientation_labels)}"
+        if orientation_labels
+        else ""
+    )
     print(
         f"Wrote {output_path} using {joblist_path} "
-        f"(array 0-{n_jobs - 1}, {n_jobs} job(s))"
+        f"(array 0-{n_jobs - 1}, {n_jobs} job(s){orientation_text})"
     )
     return output_path

@@ -3,7 +3,6 @@ cli.py
 Command-line entry point for ESTK. Wires argparse sub-commands
 (`prepare`, `slurm`, `config`) to the corresponding package functions.
 """
-
 import argparse
 
 from .config import get_config_value, load_config, set_config_value
@@ -44,6 +43,7 @@ def handle_slurm(args) -> None:
         account=args.account or get_config_value("account"),
         max_concurrent=args.max_concurrent,
         max_submit=args.max_submit,
+        orientation_labels=args.orientations,
     )
 
     print(f"Slurm script generated for project: {args.project_dir}")
@@ -150,6 +150,16 @@ def main() -> None:
     slurm_parser.add_argument("--nodes", type=int, default=1)
     slurm_parser.add_argument("--ntasks", type=int, default=48)
     slurm_parser.add_argument("--walltime", default="02:00:00")
+    slurm_parser.add_argument(
+        "--orientations",
+        nargs="+",
+        metavar="HKL",
+        default=None,
+        help=(
+            "Submit only selected orientation directories, e.g. "
+            "--orientations 001 111"
+        ),
+    )
     slurm_parser.add_argument(
         "--max-submit",
         type=int,

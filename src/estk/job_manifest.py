@@ -49,12 +49,14 @@ def write_job_manifest(
     skip_status: tuple[str, ...] = ("Converged",),
     filename: str = "joblist.txt",
     max_jobs: int | None = None,
+    orientation_labels: list[str] | None = None,
 ) -> Path:
     """
     Write a deterministic list of calculations requiring execution.
 
     Incomplete calculations are listed before calculations that have never run.
     When ``max_jobs`` is supplied, only that many calculations are written.
+    When ``orientation_labels`` is supplied, only those orientations are used.
     """
     if max_jobs is not None and max_jobs < 1:
         raise ValueError("max_jobs must be at least 1.")
@@ -62,10 +64,26 @@ def write_job_manifest(
     project_path = Path(project_dir)
     metadata_manager = MetadataManager(project_path)
 
+    available_orientations = set(metadata_manager.data["orientations"])
+    selected_orientations = (
+        set(orientation_labels)
+        if orientation_labels is not None
+        else available_orientations
+    )
+
+    missing_orientations = selected_orientations - available_orientations
+    if missing_orientations:
+        missing_text = ", ".join(sorted(missing_orientations))
+        available_text = ", ".join(sorted(available_orientations))
+        raise ValueError(
+            f"Unknown orientation(s): {missing_text}. "
+            f"Available orientations: {available_text}"
+        )
+
     jobs: list[tuple[int, str]] = []
     skipped_missing: list[str] = []
 
-    for orientation_label in sorted(metadata_manager.data["orientations"]):
+    for orientation_label in sorted(selected_orientations):
         orientation = metadata_manager.data["orientations"][orientation_label]
 
         for strain_label in sorted(orientation["strains"]):
@@ -93,9 +111,10 @@ def write_job_manifest(
         encoding="utf-8",
     )
 
+    orientation_text = ", ".join(sorted(selected_orientations))
     print(
         f"Wrote {len(lines)} of {len(jobs)} unfinished job(s) "
-        f"to {manifest_path}"
+        f"for orientation(s) {orientation_text} to {manifest_path}"
     )
 
     if skipped_missing:
